@@ -1,0 +1,9 @@
+# gtotree_worker.py — S3 polling worker
+boto3>=1.28
+
+# gtotree_report.py — interactive HTML dashboard generator
+#   The report itself is pure-stdlib; plotly is OPTIONAL and only used to
+#   INLINE the Plotly JS bundle for a fully-offline SCG-heatmap tab. Without it
+#   the report falls back to a Plotly CDN <script> (heatmap needs internet;
+#   tree/alignment/table/sunburst are dependency-free either way).
+plotly>=5.18   # optional but recommended

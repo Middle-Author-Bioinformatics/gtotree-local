@@ -213,7 +213,7 @@ HTML_SHELL = """<!DOCTYPE html>
         <div class="btn-group"><button class="btn" id="btnZoomOut">&minus;</button><button class="btn" id="btnZoomIn">+</button></div>
         <div class="spacer"></div>
         <div class="field">&#128269; <input id="treeSearch" placeholder="highlight tip..."></div>
-        <button class="btn" id="btnNewick">&#8681; Newick</button>
+        <button class="btn" id="btnNewick">&#8681; Tree (.tre)</button>
         <button class="btn" id="btnTreeSVG">&#8681; SVG</button>
       </div>
       <div class="canvas" id="treeCanvas"></div>
@@ -224,14 +224,15 @@ HTML_SHELL = """<!DOCTYPE html>
   <div class="tabpane" id="tab-alignment">
     <div class="card card-pad">
       <div class="section-head"><h2>Alignment</h2><span class="meta" id="alnMeta"></span></div>
-      <p class="section-desc">Concatenated single-copy-gene alignment. Residues are colored by biochemical group; rows follow the current tree order.</p>
+      <p class="section-desc">This is the single <strong>concatenated</strong> amino-acid alignment of all target single-copy genes (the exact matrix used to build the tree) &mdash; one row per genome. It is thousands of columns wide, so it is shown one window at a time; the controls below scroll horizontally through the alignment <strong>columns</strong> (they do not switch between genes). Residues are colored by biochemical group; rows follow the current tree order.</p>
       <div class="toolbar">
         <button class="btn active" id="alnColor">Color residues</button>
         <button class="btn active" id="alnSort">Order by tree</button>
         <div class="spacer"></div>
-        <button class="btn" id="alnPrev">&#8592; prev</button>
-        <input id="alnSlider" type="range" min="0" max="0" value="0" style="width:220px">
-        <button class="btn" id="alnNext">next &#8594;</button>
+        <span class="tool-hint">scroll columns:</span>
+        <button class="btn" id="alnPrev" title="Earlier columns">&#8592; earlier</button>
+        <input id="alnSlider" type="range" min="0" max="0" value="0" style="width:220px" title="Jump to a column">
+        <button class="btn" id="alnNext" title="Later columns">later &#8594;</button>
       </div>
       <div class="canvas" id="alnCanvas"></div>
     </div>
@@ -240,8 +241,8 @@ HTML_SHELL = """<!DOCTYPE html>
   <!-- SCG HEATMAP -->
   <div class="tabpane" id="tab-scg">
     <div class="card card-pad">
-      <div class="section-head"><h2>SCG presence heatmap</h2><span class="meta">SCG_hit_counts.tsv</span></div>
-      <p class="section-desc">Number of hits to each target single-copy gene per genome. Sparse rows can indicate incomplete genomes; multiple hits can indicate redundancy.</p>
+      <div class="section-head"><h2>SCG presence / copy-number</h2><span class="meta">SCG_hit_counts.tsv</span></div>
+      <p class="section-desc">Copies of each target single-copy gene found per genome: <strong>0 = absent</strong>, <strong>1 = present</strong> (the expected value for an SCG), <strong>2+ = multiple copies</strong> (possible redundancy/paralogs or contamination). Mostly-1 rows are ideal; gaps flag incomplete genomes.</p>
       <div id="scgCanvas"></div>
     </div>
   </div>

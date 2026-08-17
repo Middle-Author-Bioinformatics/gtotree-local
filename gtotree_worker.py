@@ -322,10 +322,10 @@ def find_first(out_dir: Path, patterns: Iterable[str]) -> Path | None:
 def collect_outputs(out_dir: Path) -> dict[str, Path | None]:
     """Locate GToTree's primary outputs regardless of the -o dir name."""
     return {
-        # <out>.tre  or  <out>_aligned_SCGs_mod_names.tre
-        "tree": find_first(out_dir, [r"\.tre$", r"\.tree$", r"\.nwk$", r"\.newick$"]),
-        # Aligned_SCGs.faa or Aligned_SCGs_mod_names.faa
-        "alignment": find_first(out_dir, [r"^Aligned_SCGs.*\.faa$", r"aligned.*\.faa$"]),
+        # Prefer the *_mod_names variant (readable taxonomy labels from -t/-D)
+        # so tips carry names by default; fall back to the accession-labeled tree.
+        "tree": find_first(out_dir, [r"mod_names.*\.tre$", r"\.tre$", r"\.tree$", r"\.nwk$", r"\.newick$"]),
+        "alignment": find_first(out_dir, [r"mod_names.*\.faa$", r"^Aligned_SCGs.*\.faa$", r"aligned.*\.faa$"]),
         "summary": find_first(out_dir, [r"Genomes?_summary_info\.tsv$", r"summary_info\.tsv$"]),
         "hits": find_first(out_dir, [r"SCG_hit_counts\.tsv$"]),
         "runlog": find_first(out_dir, [r"gtotree-?runlog\.txt$", r"runlog\.txt$"]),

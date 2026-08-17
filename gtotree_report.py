@@ -208,13 +208,11 @@ HTML_SHELL = """<!DOCTYPE html>
           <button class="btn" id="btnRadial">Radial</button>
         </div>
         <button class="btn" id="btnSupport">Support values</button>
-        <button class="btn" id="btnExpand">Expand all</button>
         <button class="btn" id="btnResetRoot">Reset root</button>
         <div class="btn-group"><button class="btn" id="btnZoomOut">&minus;</button><button class="btn" id="btnZoomIn">+</button></div>
         <div class="spacer"></div>
         <div class="field">&#128269; <input id="treeSearch" placeholder="highlight tip..."></div>
         <button class="btn" id="btnNewick">&#8681; Tree (.tre)</button>
-        <button class="btn" id="btnTreePNG">&#8681; PNG</button>
       </div>
       <div class="canvas" id="treeCanvas"></div>
     </div>
@@ -233,6 +231,7 @@ HTML_SHELL = """<!DOCTYPE html>
         <button class="btn" id="alnPrev" title="Earlier columns">&#8592; earlier</button>
         <input id="alnSlider" type="range" min="0" max="0" value="0" style="width:220px" title="Jump to a column">
         <button class="btn" id="alnNext" title="Later columns">later &#8594;</button>
+        <button class="btn" id="btnAlnDownload" title="Download the full alignment as FASTA">&#8681; Alignment (.faa)</button>
       </div>
       <div class="canvas" id="alnCanvas"></div>
     </div>
@@ -252,7 +251,7 @@ HTML_SHELL = """<!DOCTYPE html>
     <div class="card card-pad">
       <div class="section-head"><h2>Genome QC summary</h2><span class="meta" id="genomesMeta"></span></div>
       <p class="section-desc">Per-genome summary including estimated completeness/redundancy, hit counts, and labels. Click a header to sort.</p>
-      <div class="toolbar"><div class="field">&#128269; <input id="tblFilter" placeholder="filter genomes..."></div></div>
+      <div class="toolbar"><div class="field">&#128269; <input id="tblFilter" placeholder="filter genomes..."></div><div class="spacer"></div><button class="btn" id="btnSummaryDownload" title="Download the genome summary as TSV">&#8681; Summary (.tsv)</button></div>
       <div id="genomesCanvas"></div>
     </div>
   </div>

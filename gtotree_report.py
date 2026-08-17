@@ -214,7 +214,7 @@ HTML_SHELL = """<!DOCTYPE html>
         <div class="spacer"></div>
         <div class="field">&#128269; <input id="treeSearch" placeholder="highlight tip..."></div>
         <button class="btn" id="btnNewick">&#8681; Tree (.tre)</button>
-        <button class="btn" id="btnTreeSVG">&#8681; SVG</button>
+        <button class="btn" id="btnTreePNG">&#8681; PNG</button>
       </div>
       <div class="canvas" id="treeCanvas"></div>
     </div>

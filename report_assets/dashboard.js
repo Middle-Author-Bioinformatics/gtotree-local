@@ -32,6 +32,7 @@
     if (id === "scg") renderHeatmap();
     if (id === "taxonomy") renderSunburst();
     if (id === "genomes") renderTable();
+    if (id === "metadata") renderReferences();
   }
 
   /* =========================================================
@@ -482,6 +483,21 @@
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
+  function renderReferences() {
+    const host = $("#referenceCanvas"), rows = D.reference_metadata?.genomes || [];
+    if (!host) return;
+    const query = ($("#referenceFilter")?.value || "").trim().toLowerCase();
+    const columns = Array.from(new Set(rows.flatMap(row => Object.keys(row))));
+    const filtered = rows.filter(row => Object.values(row).join(" ").toLowerCase().includes(query));
+    // Render metadata as text nodes; submitted annotation strings are never HTML.
+    const table = document.createElement("table"), head = document.createElement("thead"), tr = document.createElement("tr");
+    columns.forEach(key => { const th=document.createElement("th"); th.textContent=key; tr.appendChild(th); });
+    head.appendChild(tr); table.appendChild(head);
+    const body = document.createElement("tbody");
+    filtered.forEach(row => { const line=document.createElement("tr"); columns.forEach(key => {const td=document.createElement("td");td.textContent=row[key] || "—";line.appendChild(td);});body.appendChild(line); });
+    table.appendChild(body); host.replaceChildren(table);
+  }
+
   /* ---------------- wire up ---------------- */
   document.addEventListener("DOMContentLoaded", function () {
     // parse tree once
@@ -516,6 +532,9 @@
     bind("#btnAlnDownload", downloadAlignment);
     bind("#btnSummaryDownload", downloadSummary);
 
+    const rf = $("#referenceFilter"); if (rf) rf.addEventListener("input", renderReferences);
+    bind("#downloadReferences", () => dl(JSON.stringify(D.reference_metadata,null,2), "selected-genomes.json", "application/json"));
+    if (!D.reference_metadata?.genomes?.length) hideTab("metadata");
     // table filter
     const tf = $("#tblFilter"); if (tf) tf.addEventListener("input", () => { TBL.filter = tf.value; renderTable(); });
 

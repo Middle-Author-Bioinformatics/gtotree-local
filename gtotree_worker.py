@@ -43,6 +43,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import fcntl
+import signal
+import threading
 import logging
 import os
 import re
@@ -56,6 +59,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
+
+from job_validation import validate_manifest, bound_resource_flags
 
 import boto3
 from botocore.config import Config
@@ -84,6 +89,7 @@ class JobManifest:
     job_name: str = "GToTree_output"
     gene_set: str = ""
     accessions: str | None = None
+    metadata_file: str | None = None
     proteins: list[str] = field(default_factory=list)
     genbanks: list[str] = field(default_factory=list)
     genomes: list[str] = field(default_factory=list)
@@ -166,21 +172,31 @@ def list_job_slugs(s3, input_bucket: str) -> list[str]:
     return sorted(slugs)
 
 
-def download_prefix(s3, bucket: str, prefix: str, dest: Path) -> list[Path]:
+def download_prefix(s3, bucket: str, prefix: str, dest: Path, max_bytes: int = 100 * 1024 * 1024) -> list[Path]:
     dest.mkdir(parents=True, exist_ok=True)
     downloaded: list[Path] = []
     paginator = s3.get_paginator("list_objects_v2")
+    objects, total_bytes = [], 0
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith("/"):
-                continue
-            rel = Path(key).relative_to(prefix)
-            local = dest / rel
-            local.parent.mkdir(parents=True, exist_ok=True)
-            s3.download_file(bucket, key, str(local))
-            downloaded.append(local)
-            logging.info("Downloaded s3://%s/%s -> %s", bucket, key, local)
+            objects.append(obj)
+            total_bytes += obj.get("Size", 0)
+            if len(objects) > 250 or total_bytes > max_bytes:
+                raise ValueError("Submission exceeds file-count or upload-size limits")
+    for obj in objects:
+        key = obj["Key"]
+        if key.endswith("/"):
+            continue
+        rel = Path(key).relative_to(prefix)
+        if len(rel.parts) != 1 or rel.name in (".", "..") or "\\" in rel.name:
+            raise ValueError("Job objects must use flat, safe input filenames")
+        local = (dest / rel).resolve()
+        if local.parent != dest.resolve():
+            raise ValueError("Input path escapes the job directory")
+        local.parent.mkdir(parents=True, exist_ok=True)
+        s3.download_file(bucket, key, str(local))
+        downloaded.append(local)
+        logging.info("Downloaded s3://%s/%s -> %s", bucket, key, local)
     return downloaded
 
 
@@ -247,6 +263,8 @@ def parse_manifest(path: Path, fallback_slug: str) -> JobManifest:
                 m.gene_set = val
             elif key == "Accessions File":
                 m.accessions = None if val in ("", "N/A") else val
+            elif key == "Genome Metadata File":
+                m.metadata_file = None if val in ("", "N/A") else val
             elif key == "Protein File":
                 m.proteins.append(val)
             elif key == "GenBank File":
@@ -276,7 +294,7 @@ def write_list_file(job_dir: Path, filenames: list[str], list_name: str) -> Path
 def build_gtotree_command(args, m: JobManifest, job_dir: Path, out_dir: Path) -> list[str]:
     cmd: list[str] = []
     if args.command_prefix:
-        cmd.extend(args.command_prefix.split())
+        cmd.extend(shlex.split(args.command_prefix))
     cmd.append(args.gtotree_bin)
 
     if m.accessions:
@@ -295,16 +313,28 @@ def build_gtotree_command(args, m: JobManifest, job_dir: Path, out_dir: Path) ->
     if m.pfam_file:
         cmd += ["-p", str((job_dir / m.pfam_file).resolve())]
 
-    cmd += m.extra_flags
+    cmd += bound_resource_flags(m.extra_flags, args.max_threads)
     cmd += ["-o", str(out_dir), "-F"]
     return cmd
 
 
-def run_command(cmd: list[str], log_handle) -> None:
-    logging.info("Running command: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, stdout=log_handle, stderr=subprocess.STDOUT, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(f"GToTree failed with exit code {proc.returncode}")
+def run_command(cmd: list[str], log_handle, timeout: int = 21600) -> None:
+    logging.info("Running command: %s", shlex.join(cmd))
+    proc = subprocess.Popen(cmd, stdout=log_handle, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    try:
+        result = proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+        except ProcessLookupError:
+            pass
+        raise RuntimeError("Analysis exceeded its %s-second runtime limit" % timeout)
+    if result != 0:
+        raise RuntimeError("GToTree/report command failed with exit code %s" % result)
 
 
 # ---------------------------------------------------------------------------
@@ -313,9 +343,11 @@ def run_command(cmd: list[str], log_handle) -> None:
 def find_first(out_dir: Path, patterns: Iterable[str]) -> Path | None:
     """Return the first file whose name matches any regex (case-insensitive)."""
     compiled = [re.compile(p, re.I) for p in patterns]
-    for path in sorted(out_dir.rglob("*")):
-        if path.is_file() and any(c.search(path.name) for c in compiled):
-            return path
+    paths = sorted(path for path in out_dir.rglob("*") if path.is_file())
+    for pattern in compiled:
+        for path in paths:
+            if pattern.search(path.name):
+                return path
     return None
 
 
@@ -356,8 +388,12 @@ def generate_report(args, report_dest: Path, outputs: dict, manifest: JobManifes
         seen.add(script)
         cmd: list[str] = []
         if args.command_prefix:
-            cmd.extend(args.command_prefix.split())
-        cmd += ["python", str(script), "-o", str(report_dest), "--title", manifest.job_name]
+            cmd.extend(shlex.split(args.command_prefix))
+        cmd += ["python", str(script), "-o", str(report_dest), "--title", manifest.job_name,
+                "--gene-set", manifest.gene_set, "--report-code", manifest.slug,
+                "--contact-email", args.contact_email]
+        if manifest.metadata_file:
+            cmd += ["--metadata", str(report_dest.parents[1] / "input" / manifest.metadata_file)]
         if outputs.get("tree"):
             cmd += ["--tree", str(outputs["tree"])]
         if outputs.get("alignment"):
@@ -368,7 +404,7 @@ def generate_report(args, report_dest: Path, outputs: dict, manifest: JobManifes
             cmd += ["--hits", str(outputs["hits"])]
         logging.info("Generating GToTree report with: %s", script)
         try:
-            run_command(cmd, log_handle)
+            run_command(cmd, log_handle, min(args.job_timeout, 600))
         except Exception:
             logging.exception("Report generation failed with %s", script)
             continue
@@ -385,9 +421,13 @@ def process_job(args, s3, slug: str) -> None:
     result_prefix = f"{slug}/"
     status_key = f"{result_prefix}status.json"
 
+    if not SLUG_RE.fullmatch(slug):
+        raise ValueError("Invalid job code")
     if s3_key_exists(s3, args.results_bucket, status_key) and not args.force:
-        logging.info("Skipping %s; result status already exists.", slug)
-        return
+        existing = json.loads(s3.get_object(Bucket=args.results_bucket, Key=status_key)["Body"].read())
+        if not (args.retry_failed and existing.get("state") in ("failed", "running")):
+            logging.info("Skipping %s; result status already exists.", slug)
+            return
 
     input_prefix = f"{slug}/"
     if not s3_key_exists(s3, args.input_bucket, f"{input_prefix}form-data.txt"):
@@ -406,25 +446,29 @@ def process_job(args, s3, slug: str) -> None:
     put_json(s3, args.results_bucket, status_key,
              {"slug": slug, "state": "running", "started_at": utc_now(), "input_prefix": input_prefix})
 
+    success = False
     manifest = JobManifest(slug=slug)
     try:
-        download_prefix(s3, args.input_bucket, input_prefix, job_dir)
+        download_prefix(s3, args.input_bucket, input_prefix, job_dir, args.max_upload_bytes)
         manifest = parse_manifest(job_dir / "form-data.txt", fallback_slug=slug)
         if not manifest.gene_set:
             raise RuntimeError("No 'SCG set' in form-data.txt (required for -H).")
         if not (manifest.accessions or manifest.proteins or manifest.genbanks or manifest.genomes):
             raise RuntimeError("No genome inputs (accessions / protein / GenBank / genome).")
 
+        input_summary = validate_manifest(manifest, job_dir, args)
         final_dir.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as log_handle:
             log_handle.write(f"GToTree worker started {utc_now()}\nSlug: {slug}\n")
             cmd = build_gtotree_command(args, manifest, job_dir, out_dir)
-            run_command(cmd, log_handle)
+            run_command(cmd, log_handle, args.job_timeout)
 
             outputs = collect_outputs(out_dir)
             if not (outputs["tree"] or outputs["alignment"]):
                 raise RuntimeError("GToTree produced neither a tree nor an alignment.")
 
+            if manifest.metadata_file:
+                shutil.copy2(job_dir / manifest.metadata_file, final_dir / "selected-genomes.json")
             # normalize to stable, frontend-known names
             stable = {}
             if outputs["tree"]:
@@ -450,6 +494,8 @@ def process_job(args, s3, slug: str) -> None:
 
             report_dest = job_root / "frontend_results" / "gtotree-report.html"
             report_ok = generate_report(args, report_dest, stable, manifest, log_handle)
+            if not report_ok:
+                raise RuntimeError("Tree analysis finished, but the interactive report could not be generated. See run.log.")
 
         # tarball of the full raw output dir
         tar_path = job_root / "raw-results.tar.gz"
@@ -458,7 +504,7 @@ def process_job(args, s3, slug: str) -> None:
         # ---- upload everything ----
         content_types = {
             ".tre": "text/plain", ".faa": "text/plain", ".tsv": "text/tab-separated-values",
-            ".txt": "text/plain", ".html": "text/html",
+            ".txt": "text/plain", ".html": "text/html", ".json": "application/json",
         }
         uploaded_files = []
         for f in sorted(final_dir.rglob("*")):
@@ -478,13 +524,14 @@ def process_job(args, s3, slug: str) -> None:
         put_json(s3, args.results_bucket, f"{result_prefix}result.json", {
             "slug": slug, "run_name": manifest.job_name, "gene_set": manifest.gene_set,
             "has_tree": bool(stable.get("tree")), "has_alignment": bool(stable.get("alignment")),
-            "has_report": report_ok, "files": uploaded_files,
+            "has_report": report_ok, "files": uploaded_files, "input_summary": input_summary,
         })
         # completion status
         put_json(s3, args.results_bucket, status_key, {
             "slug": slug, "state": "complete", "completed_at": utc_now(),
             "result_prefix": result_prefix, "has_report": report_ok, "files": uploaded_files,
         })
+        success = True
         logging.info("Completed job %s -> s3://%s/%s", slug, args.results_bucket, result_prefix)
 
     except Exception as e:
@@ -496,7 +543,7 @@ def process_job(args, s3, slug: str) -> None:
         if not args.continue_on_error:
             raise
     finally:
-        if args.clean and job_root.exists():
+        if args.clean and success and job_root.exists():
             shutil.rmtree(job_root)
 
 
@@ -505,16 +552,20 @@ def process_job(args, s3, slug: str) -> None:
 # ---------------------------------------------------------------------------
 def acquire_lock(lock_path: Path):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    os.write(fd, str(os.getpid()).encode())
-    os.close(fd)
-
-
-def release_lock(lock_path: Path):
+    handle = lock_path.open("a+")
     try:
-        lock_path.unlink()
-    except FileNotFoundError:
-        pass
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        raise FileExistsError(str(lock_path))
+    handle.seek(0); handle.truncate(); handle.write(str(os.getpid())); handle.flush()
+    return handle
+
+
+def release_lock(handle):
+    # Do not unlink: another process may be waiting on this same inode.
+    fcntl.flock(handle, fcntl.LOCK_UN)
+    handle.close()
 
 
 def parse_args() -> argparse.Namespace:
@@ -532,11 +583,33 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--interval", type=int, default=300, help="Polling interval seconds when not using --once.")
     p.add_argument("--force", action="store_true", help="Reprocess jobs even if status.json exists.")
     p.add_argument("--clean", action="store_true", help="Delete local work dir after each job.")
-    p.add_argument("--continue-on-error", action="store_true", help="Continue after a job failure.")
+    p.add_argument("--continue-on-error", action="store_true", default=True, help="Continue after a job failure (default).")
+    p.add_argument("--stop-on-error", action="store_false", dest="continue_on_error", help="Exit after a job failure.")
     p.add_argument("--verbose", action="store_true")
     p.add_argument("--lock-file", default=os.getenv("GTOTREE_LOCK_FILE", "/tmp/gtotree-worker.lock"))
     p.add_argument("--log-file", default=os.getenv("GTOTREE_WORKER_LOG", "/tmp/gtotree-worker.log"))
-    return p.parse_args()
+    p.add_argument("--job", action="append", help="Process only this result code; repeat to select several jobs.")
+    p.add_argument("--retry-failed", action="store_true", help="Retry selected failed/interrupted jobs; requires --job.")
+    p.add_argument("--max-references", type=int, default=100)
+    p.add_argument("--max-uploaded-genomes", type=int, default=100)
+    p.add_argument("--max-total-genomes", type=int, default=200)
+    p.add_argument("--max-upload-bytes", type=int, default=100 * 1024 * 1024)
+    p.add_argument("--max-threads", type=int, default=16)
+    p.add_argument("--job-timeout", type=int, default=21600, help="Maximum analysis runtime in seconds (default 6 hours).")
+    p.add_argument("--contact-email", default=os.getenv("MAB_DASHBOARD_EMAIL", "ark@midauthorbio.com"))
+    args = p.parse_args()
+    if (args.force or args.retry_failed) and not args.job:
+        p.error("--force and --retry-failed require --job; they must not rerun the entire queue")
+    for option in ("max_references", "max_uploaded_genomes", "max_total_genomes", "max_upload_bytes", "max_threads", "job_timeout", "interval"):
+        if getattr(args, option) < 1:
+            p.error(option.replace("_", "-") + " must be positive")
+    if args.max_references > 100:
+        p.error("max-references cannot exceed the 100-reference selection contract")
+    if args.job:
+        args.once = True
+    if args.job and any(not SLUG_RE.fullmatch(code) for code in args.job):
+        p.error("Invalid --job result code")
+    return args
 
 
 def main() -> int:
@@ -545,28 +618,35 @@ def main() -> int:
     lock_path = Path(args.lock_file)
 
     try:
-        acquire_lock(lock_path)
+        lock_handle = acquire_lock(lock_path)
     except FileExistsError:
         logging.warning("Lock already exists: %s (another worker running?)", lock_path)
         return 0
 
-    s3 = make_s3(args.region)
+    stop = threading.Event()
+    def request_stop(_signum, _frame):
+        logging.info("Shutdown requested; finishing the current job before exiting.")
+        stop.set()
+    signal.signal(signal.SIGTERM, request_stop)
+    signal.signal(signal.SIGINT, request_stop)
     try:
+        s3 = make_s3(args.region)
         while True:
-            slugs = list_job_slugs(s3, args.input_bucket)
+            slugs = args.job or list_job_slugs(s3, args.input_bucket)
             logging.info("Found %d GToTree job(s).", len(slugs))
             for slug in slugs:
+                if stop.is_set():
+                    break
                 try:
                     process_job(args, s3, slug)
                 except Exception:
                     if not args.continue_on_error:
                         raise
                     logging.exception("Continuing after failure on %s", slug)
-            if args.once:
+            if args.once or stop.wait(args.interval):
                 break
-            time.sleep(args.interval)
     finally:
-        release_lock(lock_path)
+        release_lock(lock_handle)
     return 0
 
 

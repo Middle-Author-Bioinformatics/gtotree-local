@@ -76,3 +76,7 @@ pip install -r requirements.txt   # boto3 required; plotly optional
   `gtotree-report.html` (plus Tree / Run log / Files tabs).
 - **Offline**: download `gtotree-report.html` from the Files tab and open it in
   any browser.
+
+## Assembly Grasp → GToTree integration
+
+See [ASSEMBLY_GRASP_DEPLOYMENT.md](ASSEMBLY_GRASP_DEPLOYMENT.md) for the coordinated rollout, configuration, and validation.

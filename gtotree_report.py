@@ -45,6 +45,7 @@ import sys
 import re
 from urllib.parse import urlencode, quote
 from job_validation import read_metadata
+from public_results import public_data
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -279,6 +280,8 @@ HTML_SHELL = """<!DOCTYPE html>
 
 def build_html(title, gene_set, tree_nwk, alignment, summary, hits, metadata=None,
                report_code="", contact_email="ark@midauthorbio.com") -> str:
+    title, gene_set, tree_nwk, alignment, summary, hits, metadata, report_code = public_data(
+        [title, gene_set, tree_nwk, alignment, summary, hits, metadata, report_code])
     if not all((ASSET_DIR / name).is_file() for name in ("dashboard.css", "dashboard.js")):
         raise RuntimeError("Keep report_assets/dashboard.css and dashboard.js beside gtotree_report.py")
     if not re.fullmatch(r"[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+", contact_email):

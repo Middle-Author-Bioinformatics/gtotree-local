@@ -41,6 +41,8 @@ class FakeS3:
         Path(target).write_bytes(self.objects[bucket,key])
     def upload_file(self, filename, bucket, key, ExtraArgs=None):
         self.objects[bucket,key] = Path(filename).read_bytes(); self.events.append(key)
+    def delete_object(self, Bucket, Key):
+        self.objects.pop((Bucket, Key), None); self.events.append(Key)
 
 
 class WorkflowTests(unittest.TestCase):

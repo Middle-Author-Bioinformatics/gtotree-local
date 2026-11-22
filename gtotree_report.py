@@ -162,8 +162,7 @@ HTML_SHELL = """<!DOCTYPE html>
     <div class="brand">
       <div class="brand-logo">MAB</div>
       <div>
-        <div class="brand-title">GToTree Web Studio</div>
-        <div class="brand-sub">Phylogenomics report</div>
+        <div class="brand-title">GToTree</div>
       </div>
     </div>
     <nav class="tabs">
@@ -174,16 +173,14 @@ HTML_SHELL = """<!DOCTYPE html>
       <a class="nav-link" data-tab="taxonomy">Taxonomy</a>
       <a class="nav-link" data-tab="metadata">Reference metadata</a>
     </nav>
-    <button id="themeBtn" class="icon-btn" title="Toggle theme">&#9790;</button>
+    <button id="themeBtn" class="btn" title="Toggle theme">Dark mode</button>
   </div>
 </header>
 
 <div class="container">
-  <section class="dashboard-cta" aria-label="Custom lab dashboard"><div><h2>A dashboard built around your lab</h2><p>Add experimental metadata, custom comparisons, and future datasets.</p></div><a class="dashboard-request" href="{request_href}">Request a dashboard for my lab</a></section>
+  <section class="dashboard-cta" aria-label="Custom lab dashboard"><a class="dashboard-request" href="{request_href}">Request a dashboard for my lab</a></section>
   <section class="hero">
-    <span class="pill">&#9679; GToTree &middot; phylogenomic tree</span>
     <h1>{title}</h1>
-    <p class="lead">Interactive phylogenomic report. Explore and manipulate the tree, inspect the concatenated single-copy-gene alignment, review per-genome QC, and browse taxonomy &mdash; all in one offline-capable file.</p>
     <div class="hero-meta">
       <div><div class="m-k">Pipeline</div><div class="m-v">GToTree</div></div>
       <div><div class="m-k">SCG set</div><div class="m-v">{gene_set}</div></div>
@@ -192,17 +189,16 @@ HTML_SHELL = """<!DOCTYPE html>
   </section>
 
   <div class="kpi-grid">
-    <div class="kpi"><div class="k-label">&#127793; Tips in tree</div><div class="k-val" id="kpiTips">&mdash;</div><div class="k-sub">genomes placed</div></div>
-    <div class="kpi"><div class="k-label">&#9906; Internal nodes</div><div class="k-val" id="kpiInternal">&mdash;</div><div class="k-sub">splits inferred</div></div>
-    <div class="kpi"><div class="k-label">&#129516; Alignment</div><div class="k-val" id="kpiAln">&mdash;</div><div class="k-sub">concatenated SCGs</div></div>
-    <div class="kpi"><div class="k-label">&#9881; SCG set</div><div class="k-val" id="kpiGeneSet" style="font-size:1.1rem">&mdash;</div><div class="k-sub">-H target</div></div>
+    <div class="kpi"><div class="k-label">Tips in tree</div><div class="k-val" id="kpiTips">&mdash;</div></div>
+    <div class="kpi"><div class="k-label">Internal nodes</div><div class="k-val" id="kpiInternal">&mdash;</div></div>
+    <div class="kpi"><div class="k-label">Alignment</div><div class="k-val" id="kpiAln">&mdash;</div></div>
+    <div class="kpi"><div class="k-label">SCG set</div><div class="k-val" id="kpiGeneSet" style="font-size:1.1rem">&mdash;</div></div>
   </div>
 
   <!-- TREE -->
   <div class="tabpane active" id="tab-tree">
     <div class="card card-pad">
-      <div class="section-head"><h2>Interactive tree</h2><span class="meta">GToTree_output.tre</span></div>
-      <p class="section-desc">Click a tip to re-root there. Click an internal node to collapse/expand its clade. Search highlights matching tips.</p>
+      <div class="section-head"><h2>Tree</h2><span class="meta">GToTree_output.tre</span></div>
       <div class="toolbar">
         <div class="btn-group">
           <button class="btn active" id="btnPhylo">Phylogram</button>
@@ -213,8 +209,8 @@ HTML_SHELL = """<!DOCTYPE html>
         <button class="btn" id="btnResetRoot">Reset root</button>
         <div class="btn-group"><button class="btn" id="btnZoomOut">&minus;</button><button class="btn" id="btnZoomIn">+</button></div>
         <div class="spacer"></div>
-        <div class="field">&#128269; <input id="treeSearch" placeholder="highlight tip..."></div>
-        <button class="btn" id="btnNewick">&#8681; Tree (.tre)</button>
+        <div class="field"><input id="treeSearch" aria-label="Highlight tip" placeholder="Highlight tip"></div>
+        <button class="btn" id="btnNewick">Tree (.tre)</button>
       </div>
       <div class="canvas" id="treeCanvas"></div>
     </div>
@@ -224,16 +220,16 @@ HTML_SHELL = """<!DOCTYPE html>
   <div class="tabpane" id="tab-alignment">
     <div class="card card-pad">
       <div class="section-head"><h2>Alignment</h2><span class="meta" id="alnMeta"></span></div>
-      <p class="section-desc">This is the single <strong>concatenated</strong> amino-acid alignment of all target single-copy genes (the exact matrix used to build the tree) &mdash; one row per genome. It is thousands of columns wide, so it is shown one window at a time; the controls below scroll horizontally through the alignment <strong>columns</strong> (they do not switch between genes). Residues are colored by biochemical group; rows follow the current tree order.</p>
+      <p class="section-desc">Concatenated SCG amino-acid alignment &middot; rows in tree order</p>
       <div class="toolbar">
         <button class="btn active" id="alnColor">Color residues</button>
         <button class="btn active" id="alnSort">Order by tree</button>
         <div class="spacer"></div>
-        <span class="tool-hint">scroll columns:</span>
-        <button class="btn" id="alnPrev" title="Earlier columns">&#8592; earlier</button>
-        <input id="alnSlider" type="range" min="0" max="0" value="0" style="width:220px" title="Jump to a column">
-        <button class="btn" id="alnNext" title="Later columns">later &#8594;</button>
-        <button class="btn" id="btnAlnDownload" title="Download the full alignment as FASTA">&#8681; Alignment (.faa)</button>
+        <span class="tool-hint">Columns</span>
+        <button class="btn" id="alnPrev" title="Earlier columns">Previous</button>
+        <input id="alnSlider" type="range" min="0" max="0" value="0" style="width:220px" aria-label="Alignment column">
+        <button class="btn" id="alnNext" title="Later columns">Next</button>
+        <button class="btn" id="btnAlnDownload" title="Download the full alignment as FASTA">Alignment (.faa)</button>
       </div>
       <div class="canvas" id="alnCanvas"></div>
     </div>
@@ -243,7 +239,7 @@ HTML_SHELL = """<!DOCTYPE html>
   <div class="tabpane" id="tab-scg">
     <div class="card card-pad">
       <div class="section-head"><h2>SCG presence / copy-number</h2><span class="meta">SCG_hit_counts.tsv</span></div>
-      <p class="section-desc">Copies of each target single-copy gene found per genome: <strong>0 = absent</strong>, <strong>1 = present</strong> (the expected value for an SCG), <strong>2+ = multiple copies</strong> (possible redundancy/paralogs or contamination). Mostly-1 rows are ideal; gaps flag incomplete genomes.</p>
+      <p class="section-desc">0 = absent &middot; 1 = single copy &middot; 2+ = multiple copies</p>
       <div id="scgCanvas"></div>
     </div>
   </div>
@@ -252,8 +248,7 @@ HTML_SHELL = """<!DOCTYPE html>
   <div class="tabpane" id="tab-genomes">
     <div class="card card-pad">
       <div class="section-head"><h2>Genome QC summary</h2><span class="meta" id="genomesMeta"></span></div>
-      <p class="section-desc">Per-genome summary including estimated completeness/redundancy, hit counts, and labels. Click a header to sort.</p>
-      <div class="toolbar"><div class="field">&#128269; <input id="tblFilter" placeholder="filter genomes..."></div><div class="spacer"></div><button class="btn" id="btnSummaryDownload" title="Download the genome summary as TSV">&#8681; Summary (.tsv)</button></div>
+      <div class="toolbar"><div class="field"><input id="tblFilter" aria-label="Filter genomes" placeholder="Filter genomes"></div><div class="spacer"></div><button class="btn" id="btnSummaryDownload" title="Download the genome summary as TSV">Summary (.tsv)</button></div>
       <div id="genomesCanvas"></div>
     </div>
   </div>
@@ -262,14 +257,13 @@ HTML_SHELL = """<!DOCTYPE html>
   <div class="tabpane" id="tab-taxonomy">
     <div class="card card-pad">
       <div class="section-head"><h2>Taxonomy sunburst</h2><span class="meta">from lineage columns</span></div>
-      <p class="section-desc">Hierarchical composition of the placed genomes across taxonomic ranks. Hover a wedge for its rank and genome count.</p>
       <div id="taxCanvas"></div>
     </div>
   </div>
 
-  <div class="tabpane" id="tab-metadata"><div class="card card-pad"><div class="section-head"><h2>Selected reference metadata</h2></div><p class="section-desc">Metadata retained from your Assembly Grasp selection. These are submitted reference records; some genomes may have been excluded during analysis. Consult the tree and genome QC summary for the genomes actually placed.</p><div class="toolbar"><label class="field">Search <input id="referenceFilter" placeholder="accession, organism, strain, source…"></label><button class="btn" id="downloadReferences">Download metadata JSON</button></div><div id="referenceCanvas"></div></div></div>
+  <div class="tabpane" id="tab-metadata"><div class="card card-pad"><div class="section-head"><h2>Reference metadata</h2></div><p class="section-desc">Submitted references; may include genomes excluded from the tree.</p><div class="toolbar"><label class="field">Search <input id="referenceFilter" placeholder="Accession, organism, strain, source"></label><button class="btn" id="downloadReferences">Metadata (.json)</button></div><div id="referenceCanvas"></div></div></div>
   <footer>
-    Generated by <strong>Middle Author Bioinformatics</strong> &middot; GToTree Web Studio. Please cite GToTree: Lee, M. D. (2019), <em>Bioinformatics</em> 35(20):4162&ndash;4164. This file runs entirely offline.
+    <strong>Middle Author Bioinformatics</strong> &middot; GToTree: Lee, M. D. (2019), <em>Bioinformatics</em> 35(20):4162&ndash;4164.
   </footer>
 </div>
 

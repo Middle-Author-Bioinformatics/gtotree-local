@@ -20,7 +20,7 @@
 
   /* ---------------- theme ---------------- */
   const rootEl = document.documentElement;
-  function setTheme(t) { rootEl.setAttribute("data-theme", t); try { localStorage.setItem("gt-report-theme", t); } catch (e) {} const b = $("#themeBtn"); if (b) b.textContent = t === "dark" ? "\u2600\ufe0f" : "\u263e"; }
+  function setTheme(t) { rootEl.setAttribute("data-theme", t); try { localStorage.setItem("gt-report-theme", t); } catch (e) {} const b = $("#themeBtn"); if (b) b.textContent = t === "dark" ? "Light mode" : "Dark mode"; }
   (function initTheme() { let t = "light"; try { t = localStorage.getItem("gt-report-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) {} setTheme(t); })();
 
   /* ---------------- nav / tabs ---------------- */
@@ -213,7 +213,7 @@
     if (lowRes && useCladogram && !T.radial) {
       const note = document.createElement("div");
       note.className = "tree-note";
-      note.innerHTML = `${zeroTips} of ${leaves.length} tips have ~0-length branches (near-identical genomes), which a true phylogram would draw with no visible branch. Showing <strong>cladogram</strong> spacing (topology only) so every tip is visible. Click <strong>Phylogram</strong> to force branch-length scaling anyway.`;
+      note.innerHTML = `${zeroTips} / ${leaves.length} tips have ~0-length branches. <strong>Cladogram</strong> spacing (topology only).`;
       host.appendChild(note);
     }
     host.appendChild(svg);

@@ -22,11 +22,9 @@ Frontend-required result names (published at <slug>/output/ and <slug>/)
   - output/Aligned_SCGs.faa             (concatenated SCG alignment)
   - output/Genomes_summary_info.tsv     (per-genome QC summary)
   - output/SCG_hit_counts.tsv           (per-genome SCG hit matrix)
-  - output/gtotree-runlog.txt           (run log)
   - gtotree-report.html                 (self-contained interactive dashboard)
   - status.json                         (job state)
   - result.json                         (viewer manifest)
-  - raw-results.tar.gz                  (full GToTree output dir)
 
 Typical cron usage
 ------------------
@@ -53,7 +51,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tarfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -61,6 +58,7 @@ from pathlib import Path
 from typing import Iterable
 
 from job_validation import validate_manifest, bound_resource_flags
+from public_results import PUBLIC_NAMES, PUBLIC_ERROR, sanitize_file, public_data
 
 import boto3
 from botocore.config import Config
@@ -367,11 +365,6 @@ def collect_outputs(out_dir: Path) -> dict[str, Path | None]:
     }
 
 
-def make_tarball(source_dir: Path, tar_gz: Path) -> None:
-    with tarfile.open(tar_gz, "w:gz") as tar:
-        tar.add(source_dir, arcname=source_dir.name)
-
-
 def generate_report(args, report_dest: Path, outputs: dict, manifest: JobManifest, log_handle) -> bool:
     """Bake the self-contained interactive HTML dashboard via gtotree_report.py."""
     candidates = []
@@ -441,10 +434,10 @@ def process_job(args, s3, slug: str) -> None:
     out_dir = job_root / "GToTree_output"
     final_dir = job_root / "frontend_results" / "output"
     log_path = job_root / "run.log"
-    job_root.mkdir(parents=True, exist_ok=True)
+    job_root.mkdir(parents=True, exist_ok=True, mode=0o700)
 
     put_json(s3, args.results_bucket, status_key,
-             {"slug": slug, "state": "running", "started_at": utc_now(), "input_prefix": input_prefix})
+             {"slug": slug, "state": "running", "started_at": utc_now()})
 
     success = False
     manifest = JobManifest(slug=slug)
@@ -483,8 +476,6 @@ def process_job(args, s3, slug: str) -> None:
             if outputs["hits"]:
                 dest = final_dir / "SCG_hit_counts.tsv"
                 shutil.copy2(outputs["hits"], dest); stable["hits"] = dest
-            if outputs["runlog"]:
-                shutil.copy2(outputs["runlog"], final_dir / "gtotree-runlog.txt")
             if outputs["partitions"]:
                 shutil.copy2(outputs["partitions"], final_dir / "Partitions.txt")
             if outputs["citations"]:
@@ -492,44 +483,41 @@ def process_job(args, s3, slug: str) -> None:
             if outputs["itol_colors"]:
                 shutil.copy2(outputs["itol_colors"], final_dir / "iToL-colors.txt")
 
+            # Keep original outputs/logs local; publish a sanitized scientific copy.
+            for path in final_dir.iterdir():
+                if path.is_file() and path.name in PUBLIC_NAMES:
+                    sanitize_file(path)
+
             report_dest = job_root / "frontend_results" / "gtotree-report.html"
             report_ok = generate_report(args, report_dest, stable, manifest, log_handle)
             if not report_ok:
                 raise RuntimeError("Tree analysis finished, but the interactive report could not be generated. See run.log.")
 
-        # tarball of the full raw output dir
-        tar_path = job_root / "raw-results.tar.gz"
-        make_tarball(out_dir, tar_path)
-
-        # ---- upload everything ----
+        # ---- upload only approved scientific outputs ----
         content_types = {
             ".tre": "text/plain", ".faa": "text/plain", ".tsv": "text/tab-separated-values",
             ".txt": "text/plain", ".html": "text/html", ".json": "application/json",
         }
         uploaded_files = []
-        for f in sorted(final_dir.rglob("*")):
-            if f.is_file():
+        for f in sorted(final_dir.iterdir()):
+            if f.is_file() and f.name in PUBLIC_NAMES:
                 key = f"{result_prefix}output/{f.relative_to(final_dir)}"
                 upload_file(s3, args.results_bucket, key, f, content_types.get(f.suffix, "text/plain"))
                 uploaded_files.append(f"output/{f.relative_to(final_dir)}")
         if report_ok and report_dest.exists():
             upload_file(s3, args.results_bucket, f"{result_prefix}gtotree-report.html", report_dest, "text/html")
             uploaded_files.append("gtotree-report.html")
-        upload_file(s3, args.results_bucket, f"{result_prefix}raw-results.tar.gz", tar_path, "application/gzip")
-        uploaded_files.append("raw-results.tar.gz")
-        upload_file(s3, args.results_bucket, f"{result_prefix}run.log", log_path, "text/plain")
-        uploaded_files.append("run.log")
 
         # viewer manifest (what the React ResultsView reads)
         put_json(s3, args.results_bucket, f"{result_prefix}result.json", {
-            "slug": slug, "run_name": manifest.job_name, "gene_set": manifest.gene_set,
+            "slug": slug, "run_name": public_data(manifest.job_name), "gene_set": manifest.gene_set,
             "has_tree": bool(stable.get("tree")), "has_alignment": bool(stable.get("alignment")),
             "has_report": report_ok, "files": uploaded_files, "input_summary": input_summary,
         })
         # completion status
         put_json(s3, args.results_bucket, status_key, {
             "slug": slug, "state": "complete", "completed_at": utc_now(),
-            "result_prefix": result_prefix, "has_report": report_ok, "files": uploaded_files,
+            "has_report": report_ok, "files": uploaded_files,
         })
         success = True
         logging.info("Completed job %s -> s3://%s/%s", slug, args.results_bucket, result_prefix)
@@ -537,9 +525,7 @@ def process_job(args, s3, slug: str) -> None:
     except Exception as e:
         logging.exception("Job %s failed", slug)
         put_json(s3, args.results_bucket, status_key,
-                 {"slug": slug, "state": "failed", "failed_at": utc_now(), "error": str(e)})
-        if log_path.exists():
-            upload_file(s3, args.results_bucket, f"{result_prefix}run.log", log_path, "text/plain")
+                 {"slug": slug, "state": "failed", "failed_at": utc_now(), "error": PUBLIC_ERROR})
         if not args.continue_on_error:
             raise
     finally:

@@ -7,7 +7,7 @@ worker pattern:
 Polls the input S3 bucket for jobs (`<slug>/form-data.txt`), runs GToTree, and
 publishes frontend-ready results to the results bucket. Same design as the
 FeGenie worker: `--once` cron mode, lock file, `status.json` state machine
-(running/complete/failed), structured logging, and a `raw-results.tar.gz`.
+(running/complete/failed) and private server logging.
 
 It also parses the web app's `form-data.txt`, re-validates the advanced
 `GtotreeFlags` against an allow-list (defense against command injection), builds
@@ -33,13 +33,19 @@ output/GToTree_output.tre          final Newick tree
 output/Aligned_SCGs.faa            concatenated SCG alignment
 output/Genomes_summary_info.tsv    per-genome QC + taxonomy
 output/SCG_hit_counts.tsv          per-genome SCG hit matrix
-output/gtotree-runlog.txt          run log  (+ Partitions.txt, citations.txt, iToL-colors.txt if present)
+output/Partitions.txt              optional alignment partitions
+output/citations.txt               optional scientific citations
+output/iToL-colors.txt              optional tree colors
+output/selected-genomes.json       optional submitted reference metadata
 gtotree-report.html                self-contained interactive dashboard
 result.json                        viewer manifest
 status.json                        job state
-raw-results.tar.gz                 full GToTree output dir
-run.log
 ```
+
+Only approved scientific files are published. Absolute machine paths are reduced
+to filenames in the report and scientific copies. Logs, raw output archives and
+exception details stay on the server (working directories remain subject to
+`--clean`). See [PUBLIC_RESULTS.md](PUBLIC_RESULTS.md) for cleaning older public results.
 
 ## `gtotree_report.py`
 Bakes a **self-contained, interactive HTML dashboard** from the GToTree outputs,
@@ -73,7 +79,7 @@ pip install -r requirements.txt   # boto3 required; plotly optional
 
 ## The React app shows the same dashboard two ways
 - **In-app**: the results page has a **Dashboard** tab that embeds
-  `gtotree-report.html` (plus Tree / Run log / Files tabs).
+  `gtotree-report.html` (plus Tree / Files tabs).
 - **Offline**: download `gtotree-report.html` from the Files tab and open it in
   any browser.
 

@@ -112,4 +112,27 @@ class PublicResultTests(unittest.TestCase):
         self.assertEqual(s3.objects,originals)
         self.assertEqual(s3.events,[])
 
+    def test_reports_only_refresh_preserves_every_other_object(self):
+        s3,slug,objects=self.legacy();originals=dict(s3.objects)
+        updates,removals=plan_job(s3,'results',slug,objects,reports_only=True)
+        self.assertEqual(set(updates),{'gtotree-report.html'})
+        self.assertEqual(removals,[])
+        report=updates['gtotree-report.html'].decode()
+        self.assertIn('https://midauthorbio.com/#contact',report)
+        self.assertIn('Final pricing depends on scope',report)
+        self.assertIn('aria-label="Report views"',report)
+        self.assertNotIn('class="brand"',report)
+        self.assertNotIn('brand-logo',report)
+        self.assertNotIn('mailto:',report)
+        self.assertIn('mine.fna:0.1,B:0.2',report)
+        with tempfile.TemporaryDirectory() as td:
+            apply_job(s3,'results',slug,objects,updates,removals,Path(td))
+            index=json.loads((Path(td)/slug/'index.json').read_text())
+            self.assertEqual(set(index),{slug+'/gtotree-report.html'})
+            self.assertEqual((Path(td)/slug/index[slug+'/gtotree-report.html']).read_bytes(),originals['results',slug+'/gtotree-report.html'])
+        self.assertEqual(set(s3.objects),set(originals))
+        for key,body in originals.items():
+            if key!=('results',slug+'/gtotree-report.html'):
+                self.assertEqual(s3.objects[key],body,key)
+
 if __name__=='__main__':unittest.main()

@@ -23,13 +23,15 @@ CODE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 REPORT_DATA = re.compile(r"<script>\s*window\.GT_DATA\s*=\s*(.*?);\s*</script>", re.S)
 
 
-def plan_job(s3, bucket, slug, objects):
+def plan_job(s3, bucket, slug, objects, reports_only=False):
     """Prepare all safe replacements before changing any remote object."""
     def read(name):
         return s3.get_object(Bucket=bucket, Key=slug + "/" + name)["Body"].read()
     updates, removals = {}, []
     available = sorted(name for name in objects if is_public_file(name))
     for name in objects:
+        if reports_only and not (is_public_file(name) and name.endswith(".html")):
+            continue
         if name in ("status.json", "result.json"):
             data = json.loads(read(name))
             if name == "status.json":
@@ -102,6 +104,7 @@ def main():
     parser.add_argument("--region", default="us-east-2")
     parser.add_argument("--job", action="append", help="Only this result code; repeat for several.")
     parser.add_argument("--apply", action="store_true", help="Back up and apply; default is a read-only audit.")
+    parser.add_argument("--reports-only", action="store_true", help="Rebuild existing HTML reports without changing any other objects or rerunning analysis.")
     parser.add_argument("--lock-file", type=Path, default=Path("/tmp/gtotree-scraper.lock"))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     parser.add_argument("--backup-dir", type=Path, default=Path.home() / ".mab-private" / "gtotree-results" / stamp)
@@ -129,9 +132,10 @@ def main():
         if not any(n in objects for n in ("status.json", "result.json", "gtotree-report.html", "report.html")):
             continue
         try:
-            plan = plan_job(s3, args.bucket, slug, objects)
+            plan = plan_job(s3, args.bucket, slug, objects, reports_only=args.reports_only)
             updates, removals = plan
-            print(f"{slug}: sanitize {len(updates)} scientific/status files; remove {len(removals)} diagnostic/other files", flush=True)
+            action = f"refresh {len(updates)} HTML report(s); preserve all other files" if args.reports_only else f"sanitize {len(updates)} scientific/status files; remove {len(removals)} diagnostic/other files"
+            print(f"{slug}: {action}", flush=True)
             if args.apply:
                 apply_job(s3, args.bucket, slug, objects, updates, removals, args.backup_dir)
         except Exception as exc:

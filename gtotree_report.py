@@ -281,7 +281,7 @@ def build_html(title, gene_set, tree_nwk, alignment, summary, hits, metadata=Non
     if not re.fullmatch(r"[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+", contact_email):
         raise ValueError("Invalid dashboard contact email")
     # Keep the legacy email argument compatible with existing worker commands.
-    request_href = "https://midauthorbio.com/#contact"
+    request_href = "https://midauthorbio.com/#contactdash"
     css = read_text(ASSET_DIR / "dashboard.css")
     js = read_text(ASSET_DIR / "dashboard.js")
     data = {

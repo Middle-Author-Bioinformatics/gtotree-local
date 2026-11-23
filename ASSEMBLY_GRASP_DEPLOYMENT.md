@@ -71,7 +71,7 @@ There should be one Python worker, plus its shell/flock launcher. A persistent p
 | Per-analysis thread budget | 16 |
 | Analysis runtime | 21,600 seconds / 6 hours |
 | Concurrent analyses per worker | 1 |
-| Dashboard inquiry | `https://midauthorbio.com/#contact` |
+| Dashboard inquiry | `https://midauthorbio.com/#contactdash` |
 
 Lower the reference limit if needed (its maximum is 100). Override the other limits with the documented `--max-*` and `--job-timeout` options (`--contact-email` remains accepted for older commands but no longer controls the inquiry link). CPU-related user flags are bounded to the server budget, including the product of per-task threads and parallel tasks. GToTree and subprocesses are terminated together on timeout. A single failed job does not stop the queue by default; `--stop-on-error` is available for debugging. `--clean` removes successful scratch directories and preserves failed jobs. Otherwise both are retained, as before.
 
@@ -107,7 +107,7 @@ An origin contains scheme + hostname + optional port, with no path (for example 
 
 New jobs retain the existing `<result-code>/` layout and add `output/selected-genomes.json`. The report includes a searchable reference-metadata tab. It labels the metadata as submitted references, not a claim that every selected genome passed QC or was placed in the tree. The viewer reads `status.json` so a tree uploaded before the dashboard does not prematurely mark the new job complete. Legacy jobs without status files still work.
 
-The inquiry button opens `https://midauthorbio.com/#contact` in a new tab. It does not use mailto, launch Outlook, send an automatic email, or transfer scientific files. Dashboard projects start at $999; the final quote depends on scope. The same link appears in downloaded reports.
+The inquiry button opens `https://midauthorbio.com/#contactdash` in a new tab. It does not use mailto, launch Outlook, send an automatic email, or transfer scientific files. Dashboard projects start at $999; the final quote depends on scope. The same link appears in downloaded reports.
 
 ## Validation
 

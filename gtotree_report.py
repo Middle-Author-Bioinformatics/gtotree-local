@@ -173,23 +173,6 @@ HTML_SHELL = """<!DOCTYPE html>
 
 <div class="container">
   <section class="dashboard-cta" aria-label="Custom lab dashboard"><p>Custom dashboards from $999. Final pricing depends on scope.</p><a class="dashboard-request" href="{request_href}" target="_blank" rel="noopener noreferrer">Request a dashboard for my lab</a></section>
-  <section class="hero">
-    <h1>{title}</h1>
-    <div class="hero-meta">
-      <div><div class="m-k">Pipeline</div><div class="m-v">GToTree</div></div>
-      <div><div class="m-k">SCG set</div><div class="m-v">{gene_set}</div></div>
-      <div><div class="m-k">Generated</div><div class="m-v">{generated}</div></div>
-      {report_reference}
-    </div>
-  </section>
-
-  <div class="kpi-grid">
-    <div class="kpi"><div class="k-label">Tips in tree</div><div class="k-val" id="kpiTips">&mdash;</div></div>
-    <div class="kpi"><div class="k-label">Internal nodes</div><div class="k-val" id="kpiInternal">&mdash;</div></div>
-    <div class="kpi"><div class="k-label">Alignment</div><div class="k-val" id="kpiAln">&mdash;</div></div>
-    <div class="kpi"><div class="k-label">SCG set</div><div class="k-val" id="kpiGeneSet" style="font-size:1.1rem">&mdash;</div></div>
-  </div>
-
   <!-- TREE -->
   <div class="tabpane active" id="tab-tree">
     <div class="card card-pad">
@@ -288,6 +271,7 @@ def build_html(title, gene_set, tree_nwk, alignment, summary, hits, metadata=Non
         "title": title,
         "gene_set": gene_set or "",
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "report_code": report_code,
         "newick": tree_nwk or "",
         "alignment": alignment,
         "summary": summary,
@@ -299,13 +283,10 @@ def build_html(title, gene_set, tree_nwk, alignment, summary, hits, metadata=Non
     data_json = data_json.replace("</", "<\\/")
     return HTML_SHELL.format(
         title=html.escape(title),
-        gene_set=html.escape(gene_set or "\u2014"),
-        generated=data["generated"],
         css=css,
         js=js,
         plotly=plotly_script_tag() if hits else "",
         request_href=html.escape(request_href, quote=True),
-        report_reference=('<div><div class="m-k">Result code</div><div class="m-v mono">' + html.escape(report_code) + '</div></div>') if report_code else '',
         data_json=data_json,
     )
 
@@ -352,3 +333,4 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

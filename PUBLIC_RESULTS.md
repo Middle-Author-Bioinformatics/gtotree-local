@@ -59,3 +59,20 @@ the command's errors before considering cleanup complete.
 This keeps the existing result-code sharing model; scientific results remain
 publicly retrievable. It does not add account-based authorization or erase copies
 of files someone already downloaded.
+
+## Refresh report appearance only
+
+Report HTML is saved when it is generated. Pulling the generator updates new
+reports; it does not change HTML already stored in S3. To remove the old nested
+logo, run heading and summary cards from existing reports, stop the persistent
+worker as above, then run:
+
+```bash
+/home/ark/miniconda3/bin/conda run --no-capture-output -n gtotree python cleanup_public_results.py --reports-only --apply
+```
+
+This uses private backups and the same cron lock. It rebuilds only report HTML
+from the scientific data embedded in each report; it does not rerun analyses or
+change trees, alignments, other downloads, result codes or statuses. Use `--job`
+to refresh a single result. Cron resumes the worker at its next five-minute tick.
+

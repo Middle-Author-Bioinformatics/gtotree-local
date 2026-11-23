@@ -71,9 +71,9 @@ There should be one Python worker, plus its shell/flock launcher. A persistent p
 | Per-analysis thread budget | 16 |
 | Analysis runtime | 21,600 seconds / 6 hours |
 | Concurrent analyses per worker | 1 |
-| Dashboard contact | `ark@midauthorbio.com` |
+| Dashboard inquiry | `https://midauthorbio.com/#contactdash` |
 
-Lower the reference limit if needed (its maximum is 100). Override the other limits with the documented `--max-*`, `--job-timeout`, and `--contact-email` options. CPU-related user flags are bounded to the server budget, including the product of per-task threads and parallel tasks. GToTree and subprocesses are terminated together on timeout. A single failed job does not stop the queue by default; `--stop-on-error` is available for debugging. `--clean` removes successful scratch directories and preserves failed jobs. Otherwise both are retained, as before.
+Lower the reference limit if needed (its maximum is 100). Override the other limits with the documented `--max-*` and `--job-timeout` options (`--contact-email` remains accepted for older commands but no longer controls the inquiry link). CPU-related user flags are bounded to the server budget, including the product of per-task threads and parallel tasks. GToTree and subprocesses are terminated together on timeout. A single failed job does not stop the queue by default; `--stop-on-error` is available for debugging. `--clean` removes successful scratch directories and preserves failed jobs. Otherwise both are retained, as before.
 
 Worker checks protect analysis execution. Before a public account-based launch, enforce corresponding upload/quota policies in the cloud upload service as well; these worker checks happen after objects have reached S3.
 
@@ -107,7 +107,7 @@ An origin contains scheme + hostname + optional port, with no path (for example 
 
 New jobs retain the existing `<result-code>/` layout and add `output/selected-genomes.json`. The report includes a searchable reference-metadata tab. It labels the metadata as submitted references, not a claim that every selected genome passed QC or was placed in the tree. The viewer reads `status.json` so a tree uploaded before the dashboard does not prematurely mark the new job complete. Legacy jobs without status files still work.
 
-The web inquiry form prepares an email with the result code and the user's message. It does not send automatically or create an admin record. The downloaded report also contains the inquiry email link. A future cloud endpoint can replace this transport after account and inquiry-storage configuration is selected.
+The inquiry button opens `https://midauthorbio.com/#contactdash` in a new tab. It does not use mailto, launch Outlook, send an automatic email, or transfer scientific files. Dashboard projects start at $999; the final quote depends on scope. The same link appears in downloaded reports.
 
 ## Validation
 
@@ -116,3 +116,14 @@ python -m unittest discover -s tests -v
 ```
 
 Tests use a simulated S3 client and simulated GToTree outputs; the real report generator runs. They cover mixed public/uploaded input, metadata preservation, limits, path confinement, resource budgets, locking, failed-job retention/retry, and report-before-completion publication. No live AWS requests or real phylogenomic jobs are required by the tests.
+
+
+## Refresh existing report presentation
+
+After pulling this update and stopping the persistent worker gracefully, rebuild only the published HTML reports from their embedded scientific data:
+
+```bash
+/home/ark/miniconda3/bin/conda run --no-capture-output -n gtotree python cleanup_public_results.py --reports-only --apply
+```
+
+Run from the backend checkout. This removes the old nested MAB/GToTree branding and updates the contact link in existing reports without rerunning GToTree. Other published objects remain unchanged. Original reports are backed up privately before replacement, and the refresh holds the cron lock. Cron resumes the worker after the refresh releases it. Omit `--apply` for a read-only preview, or add `--job RESULT_CODE` to target one run. Newly generated reports use the updated presentation automatically.

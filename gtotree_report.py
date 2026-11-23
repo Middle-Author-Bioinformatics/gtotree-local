@@ -43,7 +43,6 @@ import html
 import json
 import sys
 import re
-from urllib.parse import urlencode, quote
 from job_validation import read_metadata
 from public_results import public_data
 from datetime import datetime, timezone
@@ -160,13 +159,7 @@ HTML_SHELL = """<!DOCTYPE html>
 <body>
 <header class="topbar">
   <div class="container topbar-inner">
-    <div class="brand">
-      <div class="brand-logo">MAB</div>
-      <div>
-        <div class="brand-title">GToTree</div>
-      </div>
-    </div>
-    <nav class="tabs">
+    <nav class="tabs" aria-label="Report views">
       <a class="nav-link active" data-tab="tree">Tree</a>
       <a class="nav-link" data-tab="alignment">Alignment</a>
       <a class="nav-link" data-tab="scg">SCG heatmap</a>
@@ -179,13 +172,14 @@ HTML_SHELL = """<!DOCTYPE html>
 </header>
 
 <div class="container">
-  <section class="dashboard-cta" aria-label="Custom lab dashboard"><a class="dashboard-request" href="{request_href}">Request a dashboard for my lab</a></section>
+  <section class="dashboard-cta" aria-label="Custom lab dashboard"><p>Custom dashboards from $999. Final pricing depends on scope.</p><a class="dashboard-request" href="{request_href}" target="_blank" rel="noopener noreferrer">Request a dashboard for my lab</a></section>
   <section class="hero">
     <h1>{title}</h1>
     <div class="hero-meta">
       <div><div class="m-k">Pipeline</div><div class="m-v">GToTree</div></div>
       <div><div class="m-k">SCG set</div><div class="m-v">{gene_set}</div></div>
       <div><div class="m-k">Generated</div><div class="m-v">{generated}</div></div>
+      {report_reference}
     </div>
   </section>
 
@@ -286,10 +280,8 @@ def build_html(title, gene_set, tree_nwk, alignment, summary, hits, metadata=Non
         raise RuntimeError("Keep report_assets/dashboard.css and dashboard.js beside gtotree_report.py")
     if not re.fullmatch(r"[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+", contact_email):
         raise ValueError("Invalid dashboard contact email")
-    request_href = "mailto:" + contact_email + "?" + urlencode({
-        "subject": "Dashboard request — GToTree " + (report_code or title),
-        "body": "I would like a dashboard for my lab.\n\nLab / institution:\nDesired features:\n\nGToTree result code: " + report_code + "\nAnalysis: " + title,
-    }, quote_via=quote)
+    # Keep the legacy email argument compatible with existing worker commands.
+    request_href = "https://midauthorbio.com/#contactdash"
     css = read_text(ASSET_DIR / "dashboard.css")
     js = read_text(ASSET_DIR / "dashboard.js")
     data = {
@@ -313,6 +305,7 @@ def build_html(title, gene_set, tree_nwk, alignment, summary, hits, metadata=Non
         js=js,
         plotly=plotly_script_tag() if hits else "",
         request_href=html.escape(request_href, quote=True),
+        report_reference=('<div><div class="m-k">Result code</div><div class="m-v mono">' + html.escape(report_code) + '</div></div>') if report_code else '',
         data_json=data_json,
     )
 
@@ -328,7 +321,7 @@ def main(argv=None) -> int:
     p.add_argument("--hits", type=Path, help="SCG_hit_counts.tsv.")
     p.add_argument("--metadata", type=Path, help="Assembly Grasp selection JSON (reference metadata).")
     p.add_argument("--report-code", default="", help="Result code for dashboard inquiries.")
-    p.add_argument("--contact-email", default="ark@midauthorbio.com")
+    p.add_argument("--contact-email", default="ark@midauthorbio.com", help="Legacy compatibility option; inquiries now use the website contact form.")
     args = p.parse_args(argv)
 
     tree_nwk = read_text(args.tree).strip() if args.tree else ""

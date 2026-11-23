@@ -118,7 +118,7 @@ class PublicResultTests(unittest.TestCase):
         self.assertEqual(set(updates),{'gtotree-report.html'})
         self.assertEqual(removals,[])
         report=updates['gtotree-report.html'].decode()
-        self.assertIn('https://midauthorbio.com/#contactdash',report)
+        self.assertIn('https://midauthorbio.com/#gtotree',report)
         self.assertIn('Final pricing depends on scope',report)
         self.assertIn('aria-label="Report views"',report)
         self.assertNotIn('class="brand"',report)

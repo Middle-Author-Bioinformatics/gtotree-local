@@ -20,6 +20,7 @@
 
   /* ---------------- theme ---------------- */
   const rootEl = document.documentElement;
+  if (window.self !== window.top) rootEl.classList.add("embedded");
   function setTheme(t) { rootEl.setAttribute("data-theme", t); try { localStorage.setItem("gt-report-theme", t); } catch (e) {} const b = $("#themeBtn"); if (b) b.textContent = t === "dark" ? "Light mode" : "Dark mode"; }
   (function initTheme() { let t = "light"; try { t = localStorage.getItem("gt-report-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) {} setTheme(t); })();
 
@@ -65,15 +66,6 @@
     }
     const root = parse();
     return root;
-  }
-
-  function treeStats(root) {
-    let tips = 0, internal = 0, maxDepth = 0;
-    (function walk(n, d) {
-      if (!n.children.length) { tips++; maxDepth = Math.max(maxDepth, d); }
-      else { internal++; n.children.forEach(c => walk(c, d + (c.length || 0))); }
-    })(root, 0);
-    return { tips, internal, maxDepth };
   }
 
   /* =========================================================
@@ -502,12 +494,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     // parse tree once
     T.root = parseNewick(D.newick);
-    // KPIs
-    if (T.root) { const st = treeStats(T.root); setText("kpiTips", st.tips); setText("kpiInternal", st.internal); }
-    else { setText("kpiTips", "\u2014"); setText("kpiInternal", "\u2014"); }
-    setText("kpiAln", D.alignment ? (D.alignment.ids.length + " \u00d7 " + Math.max(...D.alignment.seqs.map(s => s.length)) + " aa") : "\u2014");
-    setText("kpiGeneSet", D.gene_set || "\u2014");
-
     // nav
     $$(".nav-link").forEach(a => a.addEventListener("click", e => { e.preventDefault(); showTab(a.dataset.tab); }));
     const tb = $("#themeBtn"); if (tb) tb.addEventListener("click", () => setTheme(rootEl.getAttribute("data-theme") === "dark" ? "light" : "dark"));
@@ -552,7 +538,6 @@
     showTab(T.root ? "tree" : (D.alignment ? "alignment" : "genomes"));
   });
 
-  function setText(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
   function bind(sel, fn) { const e = $(sel); if (e) e.addEventListener("click", fn); }
   function hideTab(id) { const a = $(`.nav-link[data-tab="${id}"]`); if (a) a.style.display = "none"; }
   function syncTreeBtns() {
@@ -565,3 +550,4 @@
   }
   function setActive(sel, on) { const e = $(sel); if (e) e.classList.toggle("active", !!on); }
 })();
+
